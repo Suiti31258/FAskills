@@ -1,0 +1,33 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "faskills",
+  "description": "Financial Analysis Skills - Professional-grade financial analysis tools powered by legendary investor perspectives",
+  "owner": {
+    "name": "FAskills",
+    "email": "faskills@example.com"
+  },
+  "plugins": [
+    {
+      "name": "financial-researcher",
+      "description": "Autonomous financial analyst with 7 guru perspectives (Buffett, Graham, Lynch, Wood, Soros, Dalio, Burry)",
+      "version": "1.0.0",
+      "author": {
+        "name": "FAskills",
+        "email": "faskills@example.com"
+      },
+      "source": "./financial-researcher",
+      "category": "finance",
+      "keywords": [
+        "finance",
+        "financial-analysis",
+        "financial-guru",
+        "financial-experts",
+        "investing",
+        "stock-analysis",
+        "value-investing",
+        "warren-buffett",
+        "fundamental-analysis"
+      ]
+    }
+  ]
+}

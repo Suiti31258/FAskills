@@ -1,0 +1,35 @@
+{
+  "name": "financial-researcher",
+  "description": "Professional-grade autonomous financial analyst leveraging 7 legendary investor perspectives (Buffett, Graham, Lynch, Wood, Soros, Dalio, Burry). Guided by DRIVER methodology.",
+  "version": "1.0.0",
+  "author": {
+    "name": "FAskills"
+  },
+  "license": "MIT",
+  "keywords": [
+    "finance",
+    "financial-analysis",
+    "financial-guru",
+    "financial-experts",
+    "investing",
+    "investment-analysis",
+    "stock-analysis",
+    "stocks",
+    "equity-research",
+    "value-investing",
+    "growth-investing",
+    "warren-buffett",
+    "ben-graham",
+    "peter-lynch",
+    "cathie-wood",
+    "george-soros",
+    "ray-dalio",
+    "michael-burry",
+    "fundamental-analysis",
+    "sec-filings",
+    "13f-holdings",
+    "valuation",
+    "intrinsic-value",
+    "moat-analysis"
+  ]
+}
