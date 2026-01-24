@@ -72,5 +72,5 @@ app/backend/alembic/versions/__pycache__/
 # Generated data cache
 data/parquet/stocks/
 
-# Generated reports
-reports/
+# Generated reports (kept for reference)
+# reports/
