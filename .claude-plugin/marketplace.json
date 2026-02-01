@@ -3,27 +3,23 @@
   "name": "faskills",
   "description": "Financial Analysis Skills - Professional-grade financial analysis tools powered by legendary investor perspectives",
   "owner": {
-    "name": "FAskills",
-    "email": "faskills@example.com"
+    "name": "FAskills"
   },
   "plugins": [
     {
       "name": "financial-researcher",
       "description": "Autonomous financial analyst with 7 guru perspectives (Buffett, Graham, Lynch, Wood, Soros, Dalio, Burry)",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "author": {
-        "name": "FAskills",
-        "email": "faskills@example.com"
+        "name": "FAskills"
       },
       "source": "./financial-researcher",
       "category": "finance",
       "keywords": [
         "finance",
         "financial-analysis",
-        "financial-guru",
-        "financial-experts",
-        "investing",
         "stock-analysis",
+        "investing",
         "value-investing",
         "warren-buffett",
         "fundamental-analysis"

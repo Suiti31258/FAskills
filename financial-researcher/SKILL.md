@@ -1,7 +1,7 @@
 ---
 name: financial-researcher
-description: Professional-grade autonomous financial analyst leveraging 7 legendary investor perspectives (Buffett, Graham, Lynch, Wood, Soros, Dalio, Burry). Guided by DRIVER methodology. For internal use - provides bold, forward-looking analysis.
-version: 1.0.0
+description: Professional-grade autonomous financial analyst leveraging 7 legendary investor perspectives (Buffett, Graham, Lynch, Wood, Soros, Dalio, Burry). Features Python processing layer for institutional-grade composite scores (Piotroski, Altman, Beneish). Guided by DRIVER methodology. For internal use - provides bold, forward-looking analysis.
+version: 2.0.0
 ---
 
 # Financial Researcher Skill
@@ -33,22 +33,28 @@ This skill operates in two modes and follows the DRIVER methodology:
 │     ├─> Fetch from tavily-mcp                               │
 │     └─> Fetch 13-F holdings for relevant gurus              │
 ├─────────────────────────────────────────────────────────────┤
-│  3. [REPRESENT] - Planning                                  │
-│     ├─> Map data subsets to each expert                     │
+│  3. [PROCESS] - Python Metrics Calculation ⭐ NEW           │
+│     ├─> Run processing.run_analysis() on raw data           │
+│     ├─> Calculate composite scores (Piotroski, Altman, etc) │
+│     ├─> Generate quality flags and warnings                 │
+│     └─> Format LLM-ready context for each expert            │
+├─────────────────────────────────────────────────────────────┤
+│  4. [REPRESENT] - Planning                                  │
+│     ├─> Map pre-calculated metrics to each expert           │
 │     └─> Prepare dispatch parameters                         │
 ├─────────────────────────────────────────────────────────────┤
-│  4. [IMPLEMENT] - Expert Dispatch (Full mode only)          │
+│  5. [IMPLEMENT] - Expert Dispatch (Full mode only)          │
 │     └─> Spawn 7 Task subagents IN PARALLEL                  │
 ├─────────────────────────────────────────────────────────────┤
-│  5. [VALIDATE] - Cross-Check                                │
+│  6. [VALIDATE] - Cross-Check                                │
 │     └─> Verify all expert outputs, log failures             │
 ├─────────────────────────────────────────────────────────────┤
-│  6. [EVOLVE] - Consolidation                                │
+│  7. [EVOLVE] - Consolidation                                │
 │     ├─> Tally signals                                       │
 │     ├─> Build agreement matrix                              │
 │     └─> Aggregate risks                                     │
 ├─────────────────────────────────────────────────────────────┤
-│  7. [REFLECT] - Output                                      │
+│  8. [REFLECT] - Output                                      │
 │     ├─> Generate markdown report                            │
 │     └─> Save JSON to ./reports/{ticker}_{date}.json         │
 └─────────────────────────────────────────────────────────────┘
@@ -123,43 +129,87 @@ Each expert needs specific data. Fetch the UNION once, then route SUBSETS to eac
 Legend: WB=Buffett, BG=Graham, PL=Lynch, CW=Wood, GS=Soros, RD=Dalio, MB=Burry
 ```
 
-### 2.2 Data Fetch Sequence (Full Mode)
+### 2.2 Data Windows (Extended)
+
+Extended data windows for full business cycle coverage:
+
+| Data Type | Window | Rationale |
+|-----------|--------|-----------|
+| Income Statements (Annual) | **15 years** | Full business cycle + multiple recessions |
+| Income Statements (Quarterly) | **20 quarters** | Seasonal patterns + recent trend analysis |
+| Balance Sheets (Annual) | **15 years** | Long-term capital structure evolution |
+| Cash Flow Statements (Annual) | **15 years** | Cash generation consistency |
+| Price History | **5 years** | Medium-term technical context |
+| 13-F Holdings | **3 years (12 quarters)** | Position building/reduction patterns |
+| Insider Trades | **100 records** | Recent management sentiment |
+
+### 2.3 Data Fetch Sequence (Full Mode)
 
 Execute these MCP tool calls to gather the full data union:
 
 ```python
 # ═══════════════════════════════════════════════════════════
 # PHASE 1: Financial Data (financialdatasets-mcp)
+# Extended windows for professional analysis
 # ═══════════════════════════════════════════════════════════
 
-# Financial Statements - fetch in parallel
-get_income_statements(ticker="{TICKER}", period="annual", limit=10)
-get_income_statements(ticker="{TICKER}", period="quarterly", limit=8)
-get_balance_sheets(ticker="{TICKER}", period="annual", limit=5)
-get_cash_flows(ticker="{TICKER}", period="annual", limit=5)
+# Financial Statements - fetch in parallel (extended windows)
+get_income_statements(ticker="{TICKER}", period="annual", limit=15)      # 15 years
+get_income_statements(ticker="{TICKER}", period="quarterly", limit=20)   # 20 quarters
+get_balance_sheets(ticker="{TICKER}", period="annual", limit=15)         # 15 years
+get_cash_flows(ticker="{TICKER}", period="annual", limit=15)             # 15 years
 
 # Metrics & Market Data - fetch in parallel
-get_financial_metrics(ticker="{TICKER}", period="ttm", limit=4)
+get_financial_metrics(ticker="{TICKER}", period="ttm", limit=8)          # 8 TTM periods
 get_company_facts(ticker="{TICKER}")
-get_prices(ticker="{TICKER}", start_date="{ONE_YEAR_AGO}", end_date="{TODAY}", interval="day")
-get_insider_trades(ticker="{TICKER}", limit=20)
+get_prices(ticker="{TICKER}", start_date="{FIVE_YEARS_AGO}", end_date="{TODAY}", interval="day")  # 5 years
+get_insider_trades(ticker="{TICKER}", limit=100)                         # 100 records
 
 # SEC Filings
-get_sec_filings(ticker="{TICKER}", limit=10)
+get_sec_filings(ticker="{TICKER}", limit=20)
 
 # ═══════════════════════════════════════════════════════════
 # PHASE 2: 13-F Holdings (financialdatasets-mcp)
+# Investor-first approach: Query each investor's full portfolio,
+# then filter for target ticker. Also get all owners of ticker.
 # ═══════════════════════════════════════════════════════════
 
-# Fetch holdings for each guru's fund - fetch in parallel
-get_institutional_ownership(investor="BERKSHIRE_HATHAWAY_INC", limit=100)      # Buffett
-get_institutional_ownership(investor="ARK_INVESTMENT_MANAGEMENT_LLC", limit=100) # Wood
-get_institutional_ownership(investor="SOROS_FUND_MANAGEMENT_LLC", limit=100)    # Soros
-get_institutional_ownership(investor="BRIDGEWATER_ASSOCIATES_LP", limit=100)    # Dalio
-get_institutional_ownership(investor="SCION_ASSET_MANAGEMENT_LLC", limit=100)   # Burry
+# Calculate 3-year lookback date
+report_period_gte = "{THREE_YEARS_AGO}"  # e.g., "2022-01-01"
 
-# Also query by ticker to see ALL institutional owners
-get_institutional_ownership(ticker="{TICKER}", limit=50)
+# Step 1: Fetch each guru's full portfolio (investor-first)
+get_institutional_ownership(
+    investor="BERKSHIRE_HATHAWAY_INC",
+    limit=500,
+    report_period_gte=report_period_gte
+)  # Buffett - large portfolio
+
+get_institutional_ownership(
+    investor="ARK_INVESTMENT_MANAGEMENT_LLC",
+    limit=300,
+    report_period_gte=report_period_gte
+)  # Wood
+
+get_institutional_ownership(
+    investor="SOROS_FUND_MANAGEMENT_LLC",
+    limit=300,
+    report_period_gte=report_period_gte
+)  # Soros
+
+get_institutional_ownership(
+    investor="BRIDGEWATER_ASSOCIATES_LP",
+    limit=500,
+    report_period_gte=report_period_gte
+)  # Dalio - large portfolio
+
+get_institutional_ownership(
+    investor="SCION_ASSET_MANAGEMENT_LLC",
+    limit=200,
+    report_period_gte=report_period_gte
+)  # Burry - concentrated portfolio
+
+# Step 2: Get ALL institutional owners of target ticker
+get_institutional_ownership(ticker="{TICKER}", limit=100)
 
 # ═══════════════════════════════════════════════════════════
 # PHASE 3: News & Context (tavily-mcp)
@@ -173,6 +223,233 @@ search_news(query="{TICKER} earnings revenue", ticker="{TICKER}", max_age_days=1
 
 # Risk-focused search
 search_news(query="{TICKER} risks concerns problems", ticker="{TICKER}", max_age_days=30, max_results=10, use_trusted_domains=True)
+
+```
+
+---
+
+## STEP 2B: PYTHON PROCESSING LAYER
+
+After fetching raw data, run the Python processing layer to pre-calculate professional metrics.
+
+### 2B.1 Processing Layer Location
+
+```
+/processing/
+├── __init__.py              # Main exports
+├── orchestrator.py          # Entry point: run_analysis()
+├── data_extractor.py        # Maps API responses to Python objects
+├── metrics_calculator.py    # All composite score calculations
+└── financial_metrics.py     # Legacy calculations (backwards compat)
+```
+
+### 2B.2 Processing Layer Usage
+
+```python
+from processing import run_analysis, format_for_expert
+
+# Run full analysis pipeline
+result = run_analysis(
+    ticker="{TICKER}",
+    income_statements=income_statements_response,
+    balance_sheets=balance_sheets_response,
+    cash_flows=cash_flows_response,
+    metrics=metrics_response,
+    price_data=price_response,
+    holdings_by_investor={
+        "BERKSHIRE_HATHAWAY_INC": berkshire_holdings,
+        "ARK_INVESTMENT_MANAGEMENT_LLC": ark_holdings,
+        "SOROS_FUND_MANAGEMENT_LLC": soros_holdings,
+        "BRIDGEWATER_ASSOCIATES_LP": bridgewater_holdings,
+        "SCION_ASSET_MANAGEMENT_LLC": scion_holdings,
+    },
+    insider_trades=insider_trades_response,
+    company_facts=company_facts_response,
+    wacc=0.10,  # Default WACC for EVA calculation
+)
+
+# Get LLM-ready context
+llm_context = result.to_llm_context()
+
+# Get expert-specific context
+buffett_context = format_for_expert(result, "buffett")
+burry_context = format_for_expert(result, "burry")
+```
+
+### 2B.3 Metrics Calculated (NOT from API)
+
+The processing layer calculates metrics that financialdatasets.ai does NOT provide:
+
+| Category | Metrics | Primary Users |
+|----------|---------|---------------|
+| **Composite Scores** | | |
+| Piotroski F-Score | 9-point financial strength (0-9) | Graham, Buffett, Dalio, Burry |
+| Altman Z-Score | Bankruptcy prediction (zones) | Graham, Dalio, Burry |
+| Ohlson O-Score | Bankruptcy probability (0-1) | Dalio, Burry |
+| Beneish M-Score | Earnings manipulation (-2.22 threshold) | Burry |
+| Magic Formula | Greenblatt ROIC + Earnings Yield | Buffett |
+| **Quality Metrics** | | |
+| Sloan Accrual Ratio | Earnings quality (-10% to +10% safe) | Burry |
+| Gross Profitability | Novy-Marx GP/Assets | Wood |
+| FCF Conversion | FCF/EBITDA (>80% healthy) | Buffett |
+| **Value Creation** | | |
+| Owner Earnings | Buffett's true cash to owners | Buffett |
+| EVA | NOPAT - (IC × WACC) | Dalio |
+| **Decomposition** | | |
+| DuPont 5-Factor | ROE breakdown (tax, interest, margin, turnover, leverage) | All |
+| **Growth** | | |
+| Sustainable Growth Rate | ROE × Retention Ratio | Lynch, Wood |
+| Trend Analysis | Accelerating/Decelerating patterns | Lynch, Wood |
+| **Shareholder Returns** | | |
+| Total Shareholder Yield | Dividend + Buyback + Debt Paydown | Buffett |
+
+### 2B.4 Metrics FROM API (Don't Recalculate)
+
+financialdatasets.ai already provides these 48+ metrics - use directly:
+
+- **Valuation**: P/E, P/B, P/S, EV/EBITDA, EV/Revenue, PEG
+- **Profitability**: ROE, ROA, ROIC, Gross Margin, Operating Margin, Net Margin
+- **Liquidity**: Current Ratio, Quick Ratio, Cash Ratio
+- **Leverage**: Debt/Equity, Debt/Assets, Interest Coverage
+- **Efficiency**: Asset Turnover, Inventory Turnover, DSO
+- **Growth**: Revenue Growth, EPS Growth, FCF Growth
+- **Per Share**: EPS, Book Value, FCF, Dividends
+
+### 2B.5 Processing Layer Output Structure
+
+```python
+@dataclass
+class AnalysisResult:
+    ticker: str
+    company_name: str
+    analysis_date: str
+
+    # Complete extracted company data
+    company_data: CompanyData
+
+    # All calculated metrics
+    comprehensive_analysis: ComprehensiveAnalysis
+
+    # Quick reference summary
+    summary: Dict[str, Any]
+
+    # Data quality notes
+    data_quality_notes: List[str]
+
+    def to_llm_context(self) -> str:
+        """Format all metrics as LLM-ready text context."""
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+
+@dataclass
+class ComprehensiveAnalysis:
+    ticker: str
+
+    # Composite Scores
+    piotroski: MetricResult      # F-Score (0-9)
+    altman_z: MetricResult       # Z-Score with zone
+    ohlson_o: MetricResult       # O-Score probability
+    beneish_m: MetricResult      # M-Score with flags
+    magic_formula: MetricResult  # Combined rank
+
+    # Quality Metrics
+    sloan_accrual: MetricResult
+    gross_profitability: MetricResult
+    fcf_conversion: MetricResult
+
+    # Shareholder Returns
+    shareholder_yield: MetricResult
+
+    # Value Creation
+    eva: MetricResult
+    owner_earnings: MetricResult
+
+    # Decomposition
+    dupont: MetricResult
+
+    # Growth
+    sustainable_growth: MetricResult
+    revenue_trend: MetricResult
+    earnings_trend: MetricResult
+
+    # Summary
+    red_flags: List[str]
+    green_flags: List[str]
+    overall_quality_score: float  # 0-100
+
+@dataclass
+class MetricResult:
+    value: float
+    interpretation: str
+    components: Dict[str, Any]
+    flags: List[str]
+    data_quality: float  # 0-1
+```
+
+### 2B.6 Example LLM Context Output
+
+```markdown
+# Pre-Calculated Metrics for AAPL
+Company: Apple Inc
+Analysis Date: 2026-01-23
+
+## Composite Scores
+### Piotroski F-Score: 8/9
+Interpretation: Very Strong - High quality, consider buying
+Components: ROA+, CFO+, ΔROA+, Accruals+, ΔLeverage+, ΔLiquidity+, NoDilution+, ΔMargin+, ΔTurnover-
+
+### Altman Z-Score: 4.52
+Interpretation: Safe Zone - Low bankruptcy risk
+
+### Beneish M-Score: -2.85
+Interpretation: Unlikely Manipulator (M=-2.85)
+
+## Quality Metrics
+### Sloan Accrual Ratio: -3.2%
+Interpretation: Safe Zone - Quality earnings backed by cash
+
+### FCF Conversion: 95.2%
+Interpretation: Healthy - Strong cash conversion
+
+### Gross Profitability (GP/Assets): 38.5%
+Interpretation: Excellent gross profitability
+
+## Value Creation
+### Owner Earnings: $98.5B
+Per Share: $6.42
+Interpretation: Owner earnings exceed net income - high quality
+
+### Economic Value Added (EVA): $72.3B
+Interpretation: Creating value: $72.3B above cost of capital
+
+## Shareholder Returns
+### Total Shareholder Yield: 4.8%
+  - Dividend Yield: 0.5%
+  - Buyback Yield: 4.1%
+  - Debt Paydown Yield: 0.2%
+
+## ROE Decomposition (DuPont 5-Factor)
+ROE: 147.2%
+  - Tax Burden: 0.84
+  - Interest Burden: 0.99
+  - EBIT Margin: 30.1%
+  - Asset Turnover: 1.15
+  - Leverage: 5.12x
+Analysis: ROE driven by strong margins, efficient asset use, leverage
+
+## Sustainable Growth
+Sustainable Growth Rate: 143.2%
+Interpretation: High sustainable growth - can grow rapidly internally
+
+## ✓ GREEN FLAGS
+- Very strong Piotroski F-Score (8/9)
+- Safe Altman Z-Score zone
+- Low manipulation risk (Beneish < -2.22)
+- Excellent FCF conversion (>80%)
+- Positive EVA - creating shareholder value
+
+## Overall Quality Score: 87/100
 ```
 
 ### 2.3 Data Fetch Sequence (Quick Mode)
@@ -189,19 +466,32 @@ get_prices(ticker="{TICKER}", start_date="{90_DAYS_AGO}", end_date="{TODAY}", in
 search_finance(query="{TICKER} stock", ticker="{TICKER}", max_results=3)
 ```
 
-### 2.4 Data Subset Routing
+### 2.5 Data Subset Routing
 
-After fetching the union, route subsets to each expert:
+After fetching raw data and running Python processing, route pre-calculated metrics to each expert:
 
 ```javascript
+// Pre-calculated metrics from Python processing layer
+const calculated = {
+  piotroski: calculate_piotroski(financials),           // F-Score (0-9)
+  altman: calculate_altman_z(financials, market_data),  // Z-Score
+  beneish: calculate_beneish_m(financials),             // M-Score
+  owner_earnings: calculate_owner_earnings(financials), // Buffett method
+  roic: calculate_roic(financials),                     // Return on Invested Capital
+  graham: calculate_graham_valuation(financials, price), // Graham Number, NCAV
+  valuation: calculate_valuation_metrics(financials, market_data), // PEG, EV/EBITDA, etc.
+  growth: calculate_growth_analysis(financials)         // CAGR, trends
+};
+
 const dataSubsets = {
   warren_buffett: {
-    metrics_json: financial_metrics,
-    statements_json: {
-      income_statements: income_statements_annual,
-      balance_sheets: balance_sheets,
-      cash_flows: cash_flows
-    },
+    // Pre-calculated metrics (primary)
+    owner_earnings: calculated.owner_earnings,
+    roic: calculated.roic,
+    piotroski: calculated.piotroski,
+    valuation: calculated.valuation,
+    growth: calculated.growth,
+    // Context data
     current_price: latest_price,
     market_cap: company_facts.market_cap,
     filings_content: sec_filings,
@@ -210,12 +500,13 @@ const dataSubsets = {
   },
 
   ben_graham: {
-    metrics_json: financial_metrics,
-    statements_json: {
-      income_statements: income_statements_annual,
-      balance_sheets: balance_sheets,
-      cash_flows: cash_flows
-    },
+    // Pre-calculated metrics (primary)
+    graham: calculated.graham,           // Graham Number, NCAV
+    piotroski: calculated.piotroski,     // Quality screen
+    altman: calculated.altman,           // Bankruptcy risk
+    valuation: calculated.valuation,
+    growth: calculated.growth,
+    // Context data
     current_price: latest_price,
     market_cap: company_facts.market_cap,
     filings_content: sec_filings,
@@ -224,12 +515,11 @@ const dataSubsets = {
   },
 
   peter_lynch: {
-    metrics_json: financial_metrics,
-    statements_json: {
-      income_statements: income_statements_annual,
-      balance_sheets: balance_sheets,
-      cash_flows: cash_flows
-    },
+    // Pre-calculated metrics (primary)
+    valuation: calculated.valuation,     // PEG ratio is key
+    growth: calculated.growth,           // Growth trajectory
+    piotroski: calculated.piotroski,     // Quality check
+    // Context data
     current_price: latest_price,
     market_cap: company_facts.market_cap,
     filings_content: sec_filings,
@@ -239,12 +529,10 @@ const dataSubsets = {
   },
 
   cathie_wood: {
-    metrics_json: financial_metrics,
-    statements_json: {
-      income_statements: income_statements_annual,
-      balance_sheets: balance_sheets,
-      cash_flows: cash_flows
-    },
+    // Pre-calculated metrics (primary)
+    growth: calculated.growth,           // Revenue CAGR critical
+    valuation: calculated.valuation,
+    // Context data
     current_price: latest_price,
     market_cap: company_facts.market_cap,
     filings_content: sec_filings,
@@ -253,22 +541,25 @@ const dataSubsets = {
   },
 
   george_soros: {
-    metrics_json: financial_metrics,
-    statements_json: null,  // Soros doesn't need detailed statements
+    // Pre-calculated metrics (primary)
+    valuation: calculated.valuation,
+    // Context data (Soros focuses on price action & sentiment)
     current_price: latest_price,
     market_cap: company_facts.market_cap,
-    price_history: prices,  // Full price history for reflexivity analysis
+    price_history: prices,  // Full 5-year price history for reflexivity analysis
     filings_content: null,
     news_items: [...news_finance, ...news_recent],
     holdings_json: soros_holdings.filter(h => h.ticker === ticker)
   },
 
   ray_dalio: {
-    metrics_json: financial_metrics,
-    statements_json: {
-      balance_sheets: balance_sheets,
-      cash_flows: cash_flows
-    },
+    // Pre-calculated metrics (primary)
+    altman: calculated.altman,           // Z-Score for stress testing
+    roic: calculated.roic,
+    piotroski: calculated.piotroski,
+    valuation: calculated.valuation,
+    growth: calculated.growth,
+    // Context data
     current_price: latest_price,
     market_cap: company_facts.market_cap,
     filings_content: sec_filings,
@@ -278,20 +569,35 @@ const dataSubsets = {
 
   michael_burry: {
     // Burry gets EVERYTHING - he's the forensic analyst
-    metrics_json: financial_metrics,
-    statements_json: {
-      income_statements: [...income_statements_annual, ...income_statements_quarterly],
-      balance_sheets: balance_sheets,
-      cash_flows: cash_flows
-    },
+    // Pre-calculated metrics (primary - forensic focus)
+    beneish: calculated.beneish,         // M-Score for manipulation detection
+    piotroski: calculated.piotroski,     // F-Score quality check
+    altman: calculated.altman,           // Z-Score bankruptcy risk
+    owner_earnings: calculated.owner_earnings, // Cash flow quality
+    valuation: calculated.valuation,
+    growth: calculated.growth,
+    // Context data (full access for forensic analysis)
     current_price: latest_price,
     market_cap: company_facts.market_cap,
     filings_content: sec_filings,  // Full filings for forensic analysis
     news_items: [...news_finance, ...news_recent, ...news_risks],
-    insider_trades: insider_trades,  // Important for Burry
+    insider_trades: insider_trades,  // Critical for Burry
     holdings_json: scion_holdings.filter(h => h.ticker === ticker)
   }
 };
+
+// Expert-to-Metric Mapping Summary:
+// ┌─────────────┬───────────┬─────────┬──────────┬────────┬──────┬────────┬───────┬────────┐
+// │ Expert      │ Piotroski │ Altman  │ Beneish  │ Owner  │ ROIC │ Graham │ Val.  │ Growth │
+// ├─────────────┼───────────┼─────────┼──────────┼────────┼──────┼────────┼───────┼────────┤
+// │ Buffett     │     ✓     │         │          │   ✓    │  ✓   │        │   ✓   │   ✓    │
+// │ Graham      │     ✓     │    ✓    │          │        │      │   ✓    │   ✓   │   ✓    │
+// │ Lynch       │     ✓     │         │          │        │      │        │   ✓   │   ✓    │
+// │ Wood        │           │         │          │        │      │        │   ✓   │   ✓    │
+// │ Soros       │           │         │          │        │      │        │   ✓   │        │
+// │ Dalio       │     ✓     │    ✓    │          │        │  ✓   │        │   ✓   │   ✓    │
+// │ Burry       │     ✓     │    ✓    │    ✓     │   ✓    │      │        │   ✓   │   ✓    │
+// └─────────────┴───────────┴─────────┴──────────┴────────┴──────┴────────┴───────┴────────┘
 ```
 
 ---
@@ -314,16 +620,26 @@ Use Task tool with:
 For each expert, construct the prompt by:
 
 1. Load the expert template from `experts/{guru_id}.md`
-2. Replace template variables with actual data:
+2. Replace template variables with pre-calculated data:
    - `{TICKER}` → actual ticker symbol
    - `{COMPANY_NAME}` → from company_facts
-   - `{metrics_json}` → JSON.stringify(dataSubsets[guru].metrics_json)
-   - `{statements_json}` → JSON.stringify(dataSubsets[guru].statements_json)
    - `{current_price}` → latest price
    - `{market_cap}` → formatted market cap
+
+   **Pre-calculated Metrics (from Python processing layer):**
+   - `{piotroski_json}` → Piotroski F-Score with component breakdown
+   - `{altman_json}` → Altman Z-Score with zone classification
+   - `{beneish_json}` → Beneish M-Score with red flags
+   - `{owner_earnings_json}` → Owner Earnings calculation
+   - `{roic_json}` → ROIC with interpretation
+   - `{graham_json}` → Graham Number and NCAV
+   - `{valuation_json}` → PEG, EV/EBITDA, FCF yield, etc.
+   - `{growth_json}` → CAGR, trends, acceleration
+
+   **Context Data:**
    - `{filings_content}` → formatted SEC filings
    - `{news_items}` → formatted news items
-   - `{holdings_json}` → JSON.stringify(holdings for this guru)
+   - `{holdings_json}` → 13-F holdings for this guru (with 3-year history)
 
 ### 3.3 Parallel Dispatch Call
 
@@ -395,17 +711,17 @@ After parallel dispatch:
 [DISCOVER] Starting analysis for {TICKER}
 ═══════════════════════════════════════════════════════════
 
-[DISCOVER] Fetching financial statements...
+[DISCOVER] Fetching financial statements (15 years)...
 [DISCOVER] Fetching metrics and market data...
 [DISCOVER] Fetching SEC filings...
-[DISCOVER] Fetching 13-F institutional holdings...
+[DISCOVER] Fetching 13-F institutional holdings (3 years)...
 [DISCOVER] Fetching news and market context...
 [DISCOVER] Data collection complete.
 
 Data Summary:
-- Financial Statements: {N} periods loaded
+- Financial Statements: {N} annual + {N} quarterly periods
 - Metrics: {N} metrics available
-- Price History: {N} days
+- Price History: {N} days (5 years)
 - SEC Filings: {N} filings
 - 13-F Holdings: {N} relevant positions found
 - News Articles: {N} items
@@ -417,7 +733,82 @@ Data Summary:
 3. Log any missing data points
 4. Calculate data quality score
 
-### 4.2 [REPRESENT] Phase
+### 4.2 [PROCESS] Phase ⭐ NEW
+
+**Output to user:**
+```
+═══════════════════════════════════════════════════════════
+[PROCESS] Calculating professional metrics
+═══════════════════════════════════════════════════════════
+
+[PROCESS] Running Python processing layer...
+[PROCESS] Calculating composite scores:
+         ├─ Piotroski F-Score: {X}/9 ({interpretation})
+         ├─ Altman Z-Score: {X} ({zone})
+         ├─ Beneish M-Score: {X} ({interpretation})
+         └─ Ohlson O-Score: {X}% probability
+
+[PROCESS] Calculating quality metrics:
+         ├─ Sloan Accrual: {X}%
+         ├─ FCF Conversion: {X}%
+         └─ Gross Profitability: {X}%
+
+[PROCESS] Value creation analysis:
+         ├─ Owner Earnings: ${X}
+         └─ EVA: ${X}
+
+[PROCESS] Generating expert contexts...
+[PROCESS] Pre-calculation complete.
+
+Quality Summary:
+- Overall Quality Score: {X}/100
+- Red Flags: {N}
+- Green Flags: {N}
+```
+
+**Actions:**
+1. Call `run_analysis()` from processing layer
+2. Extract composite scores and quality metrics
+3. Identify red/green flags
+4. Generate expert-specific contexts using `format_for_expert()`
+5. Log any calculation warnings
+
+**Python Code:**
+```python
+from processing import run_analysis, format_for_expert
+
+# Run full processing pipeline
+result = run_analysis(
+    ticker=ticker,
+    income_statements=income_statements,
+    balance_sheets=balance_sheets,
+    cash_flows=cash_flows,
+    metrics=metrics,
+    price_data=price_data,
+    holdings_by_investor=holdings_by_investor,
+    insider_trades=insider_trades,
+    company_facts=company_facts,
+)
+
+# Extract key metrics for display
+analysis = result.comprehensive_analysis
+print(f"Piotroski F-Score: {analysis.piotroski.value}/9")
+print(f"Altman Z-Score: {analysis.altman_z.value}")
+print(f"Overall Quality: {analysis.overall_quality_score}/100")
+
+# Generate expert contexts
+expert_contexts = {
+    "buffett": format_for_expert(result, "buffett"),
+    "graham": format_for_expert(result, "graham"),
+    "lynch": format_for_expert(result, "lynch"),
+    "wood": format_for_expert(result, "wood"),
+    "soros": format_for_expert(result, "soros"),
+    "dalio": format_for_expert(result, "dalio"),
+    "burry": format_for_expert(result, "burry"),
+}
+```
+
+### 4.4 [REPRESENT] Phase
 
 **Output to user:**
 ```
@@ -430,25 +821,31 @@ Data Summary:
 [REPRESENT] Market Cap: ${MARKET_CAP}
 [REPRESENT] Current Price: ${CURRENT_PRICE}
 
-Experts to dispatch:
-  ├─ Warren Buffett  (moat, intrinsic value)
-  ├─ Ben Graham      (margin of safety, asset values)
-  ├─ Peter Lynch     (PEG, growth story)
-  ├─ Cathie Wood     (disruption, TAM expansion)
-  ├─ George Soros    (reflexivity, sentiment)
-  ├─ Ray Dalio       (cycles, stress testing)
-  └─ Michael Burry   (forensics, bear case)
+Pre-Calculated Metrics Summary:
+  ├─ Piotroski F-Score: {X}/9 ({interpretation})
+  ├─ Altman Z-Score: {X} ({zone})
+  ├─ Quality Score: {X}/100
+  └─ Red Flags: {N} | Green Flags: {N}
 
-[REPRESENT] Data routing configured.
+Experts to dispatch:
+  ├─ Warren Buffett  (moat, owner earnings, FCF conversion)
+  ├─ Ben Graham      (margin of safety, Z-Score, NCAV)
+  ├─ Peter Lynch     (PEG, sustainable growth, trends)
+  ├─ Cathie Wood     (disruption, gross profitability)
+  ├─ George Soros    (reflexivity, sentiment)
+  ├─ Ray Dalio       (cycles, stress testing, EVA)
+  └─ Michael Burry   (M-Score, accruals, forensics)
+
+[REPRESENT] Expert contexts prepared from processing layer.
 ```
 
 **Actions:**
 1. Validate ticker and data availability
-2. Prepare data subsets for each expert
-3. Build the expert prompts
+2. Use `format_for_expert()` to prepare expert-specific contexts
+3. Build the expert prompts with pre-calculated metrics
 4. Log the analysis plan
 
-### 4.3 [IMPLEMENT] Phase (Full Mode Only)
+### 4.5 [IMPLEMENT] Phase (Full Mode Only)
 
 **Output to user:**
 ```
@@ -485,7 +882,7 @@ Experts to dispatch:
 [IMPLEMENT] All expert analyses received.
 ```
 
-### 4.4 [VALIDATE] Phase
+### 4.6 [VALIDATE] Phase
 
 **Output to user:**
 ```
@@ -511,7 +908,7 @@ Assumption Check:
 3. Identify contradictory assumptions
 4. Flag if consensus is suspiciously uniform (potential groupthink)
 
-### 4.5 [EVOLVE] Phase
+### 4.7 [EVOLVE] Phase
 
 **Output to user:**
 ```
@@ -723,7 +1120,7 @@ const consolidation = {
 };
 ```
 
-### 4.6 [REFLECT] Phase
+### 4.8 [REFLECT] Phase
 
 **Output to user:**
 ```
@@ -930,12 +1327,23 @@ Output the formatted markdown report directly to the user. The report should:
 
 ### 5.1 Quick Mode Output
 
+Quick mode still runs the Python processing layer but skips expert dispatch.
+
 ```markdown
 # {TICKER} Quick Lookup
 
 **{COMPANY_NAME}** | ${CURRENT_PRICE} | Market Cap: ${MARKET_CAP}
 
-## Key Metrics
+## Composite Scores (Pre-Calculated)
+
+| Score | Value | Interpretation |
+|-------|-------|----------------|
+| **Piotroski F-Score** | {X}/9 | {interpretation} |
+| **Altman Z-Score** | {X} | {zone} |
+| **Beneish M-Score** | {X} | {manipulation_risk} |
+| **Overall Quality** | {X}/100 | {quality_interpretation} |
+
+## Key Metrics (from API)
 
 | Metric | Value | Assessment |
 |--------|-------|------------|
@@ -943,11 +1351,19 @@ Output the formatted markdown report directly to the user. The report should:
 | P/B Ratio | {PB} | |
 | PEG Ratio | {PEG} | |
 | ROE | {ROE}% | |
-| ROA | {ROA}% | |
+| ROIC | {ROIC}% | |
 | Debt/Equity | {DE} | |
 | Revenue Growth | {RG}% | YoY |
-| Profit Margin | {PM}% | |
+| FCF Conversion | {FCF_CONV}% | |
 | Free Cash Flow | ${FCF} | |
+
+## Quality Indicators
+
+### Green Flags ✓
+{list of green_flags from processing layer}
+
+### Red Flags ⚠️
+{list of red_flags from processing layer}
 
 ## Price Context
 
@@ -957,10 +1373,11 @@ Output the formatted markdown report directly to the user. The report should:
 
 ## Quick Assessment
 
-{2-3 sentence summary based on metrics}
+{2-3 sentence summary based on composite scores and flags}
 
 ---
-*Quick lookup generated by financial-researcher v1.0.0*
+*Quick lookup generated by financial-researcher v2.0.0*
+*Processing layer: Piotroski, Altman, Beneish, Quality Score*
 *For full 7-guru analysis, run with --full flag*
 ```
 
@@ -987,14 +1404,17 @@ Save to `./reports/{TICKER}_{YYYY-MM-DD}.json`:
     "company_name": "{COMPANY_NAME}",
     "generated_at": "{ISO_DATETIME}",
     "mode": "full",
-    "skill_version": "1.0.0",
+    "skill_version": "2.0.0",
+    "processing_version": "2.0.0",
     "current_price": {PRICE},
     "market_cap": {MARKET_CAP}
   },
   "data_sources": {
     "financial_data": {
       "source": "financialdatasets.ai",
-      "retrieved_at": "{ISO_DATETIME}"
+      "retrieved_at": "{ISO_DATETIME}",
+      "periods_annual": 15,
+      "periods_quarterly": 20
     },
     "news": {
       "source": "tavily",
@@ -1007,6 +1427,108 @@ Save to `./reports/{TICKER}_{YYYY-MM-DD}.json`:
     "thirteenf_holdings": {
       "berkshire_hathaway": {"as_of_date": "2025-09-30", "has_position": true},
       "ark_invest": {"as_of_date": "2025-12-31", "has_position": false}
+    }
+  },
+  "processing_layer": {
+    "composite_scores": {
+      "piotroski_f_score": {
+        "value": 8,
+        "max": 9,
+        "interpretation": "Very Strong - High quality",
+        "components": {
+          "f1_roa_positive": 1,
+          "f2_cfo_positive": 1,
+          "f3_roa_improving": 1,
+          "f4_accruals_quality": 1,
+          "f5_leverage_decreasing": 1,
+          "f6_liquidity_improving": 1,
+          "f7_no_dilution": 1,
+          "f8_margin_improving": 1,
+          "f9_turnover_improving": 0
+        }
+      },
+      "altman_z_score": {
+        "value": 4.52,
+        "zone": "safe",
+        "interpretation": "Safe Zone - Low bankruptcy risk",
+        "components": {
+          "x1_working_capital_ratio": 0.15,
+          "x2_retained_earnings_ratio": 0.45,
+          "x3_ebit_ratio": 0.22,
+          "x4_market_to_liabilities": 2.8,
+          "x5_asset_turnover": 1.1
+        }
+      },
+      "ohlson_o_score": {
+        "value": 0.02,
+        "probability_percent": 2.0,
+        "interpretation": "Lower bankruptcy risk (2%)"
+      },
+      "beneish_m_score": {
+        "value": -2.85,
+        "likely_manipulator": false,
+        "interpretation": "Unlikely Manipulator",
+        "red_flags": []
+      },
+      "magic_formula": {
+        "combined_score": 45.2,
+        "earnings_yield": 6.5,
+        "roic": 38.7
+      }
+    },
+    "quality_metrics": {
+      "sloan_accrual_ratio": {
+        "value": -3.2,
+        "interpretation": "Safe Zone - Quality earnings backed by cash"
+      },
+      "gross_profitability": {
+        "value": 38.5,
+        "interpretation": "Excellent gross profitability"
+      },
+      "fcf_conversion": {
+        "value": 95.2,
+        "interpretation": "Healthy - Strong cash conversion"
+      }
+    },
+    "value_creation": {
+      "owner_earnings": {
+        "value": 98500000000,
+        "per_share": 6.42,
+        "interpretation": "Owner earnings exceed net income - high quality"
+      },
+      "eva": {
+        "value": 72300000000,
+        "interpretation": "Creating value: $72.3B above cost of capital"
+      }
+    },
+    "shareholder_returns": {
+      "total_yield": 4.8,
+      "dividend_yield": 0.5,
+      "buyback_yield": 4.1,
+      "debt_paydown_yield": 0.2
+    },
+    "dupont_analysis": {
+      "roe": 147.2,
+      "tax_burden": 0.84,
+      "interest_burden": 0.99,
+      "ebit_margin": 30.1,
+      "asset_turnover": 1.15,
+      "leverage": 5.12
+    },
+    "growth": {
+      "sustainable_growth_rate": 143.2,
+      "revenue_trend": "accelerating",
+      "earnings_trend": "stable"
+    },
+    "summary": {
+      "overall_quality_score": 87,
+      "red_flags": [],
+      "green_flags": [
+        "Very strong Piotroski F-Score (8/9)",
+        "Safe Altman Z-Score zone",
+        "Low manipulation risk",
+        "Excellent FCF conversion"
+      ]
     }
   },
   "experts": {
@@ -1041,12 +1563,16 @@ Save to `./reports/{TICKER}_{YYYY-MM-DD}.json`:
       "range_high": 280
     }
   },
-  "quick_metrics": {
+  "api_metrics": {
     "pe_ratio": 25.4,
     "pb_ratio": 8.2,
     "peg_ratio": 1.8,
     "roe": 42.1,
-    "debt_to_equity": 0.45
+    "roic": 38.7,
+    "debt_to_equity": 0.45,
+    "current_ratio": 1.2,
+    "revenue_growth": 8.5,
+    "eps_growth": 12.3
   }
 }
 ```
@@ -1168,6 +1694,10 @@ Headers: X-API-KEY: {from environment}
 
 10. **Complete Output**: Both markdown (displayed) and JSON (saved) for every analysis.
 
+11. **Pre-Calculate, Don't Duplicate**: Use Python processing layer for composite scores. Don't recalculate what financialdatasets.ai provides.
+
+12. **Processing Layer First**: ALWAYS run `run_analysis()` before expert dispatch. Experts receive pre-calculated metrics, not raw data.
+
 ---
 
 ## END-TO-END TEST PROCEDURE
@@ -1183,34 +1713,63 @@ Headers: X-API-KEY: {from environment}
 1. **Mode Selection**: Should detect `--full` flag and skip mode question
 
 2. **[DISCOVER] Phase** (10-30 seconds):
-   - Fetch financial statements (income, balance, cash flow)
+   - Fetch financial statements (15 years annual, 20 quarters)
    - Fetch metrics and market data
    - Fetch SEC filings
-   - Fetch 13-F holdings for 5 investors
+   - Fetch 13-F holdings for 5 investors (3-year history)
    - Fetch news and context from Tavily
 
    **Expected output:**
    ```
-   [DISCOVER] Fetching financial statements...
+   [DISCOVER] Fetching financial statements (15 years)...
    [DISCOVER] Fetching metrics and market data...
    [DISCOVER] Fetching SEC filings...
-   [DISCOVER] Fetching 13-F institutional holdings...
+   [DISCOVER] Fetching 13-F institutional holdings (3 years)...
    [DISCOVER] Fetching news and market context...
    [DISCOVER] Data collection complete.
 
    Data Summary:
-   - Financial Statements: 15+ periods loaded
-   - Metrics: 10+ metrics available
-   - Price History: 250+ days
-   - SEC Filings: 5+ filings
+   - Financial Statements: 15 annual + 20 quarterly periods
+   - Metrics: 48+ metrics available
+   - Price History: 1250+ days (5 years)
+   - SEC Filings: 20+ filings
    - 13-F Holdings: X relevant positions found
    - News Articles: 20+ items
    ```
 
-3. **[REPRESENT] Phase** (1-2 seconds):
+3. **[PROCESS] Phase** (2-5 seconds):
+   - Run Python processing layer
+   - Calculate composite scores
+   - Generate expert contexts
+
+   **Expected output:**
+   ```
+   [PROCESS] Running Python processing layer...
+   [PROCESS] Calculating composite scores:
+            ├─ Piotroski F-Score: 8/9 (Very Strong)
+            ├─ Altman Z-Score: 4.52 (Safe Zone)
+            ├─ Beneish M-Score: -2.85 (Unlikely Manipulator)
+            └─ Ohlson O-Score: 2% probability
+
+   [PROCESS] Calculating quality metrics:
+            ├─ Sloan Accrual: -3.2%
+            ├─ FCF Conversion: 95.2%
+            └─ Gross Profitability: 38.5%
+
+   [PROCESS] Value creation analysis:
+            ├─ Owner Earnings: $98.5B
+            └─ EVA: $72.3B
+
+   Quality Summary:
+   - Overall Quality Score: 87/100
+   - Red Flags: 0
+   - Green Flags: 4
+   ```
+
+4. **[REPRESENT] Phase** (1-2 seconds):
    - Validate ticker
-   - Prepare data subsets
-   - Build expert prompts
+   - Prepare data subsets with pre-calculated metrics
+   - Build expert prompts using format_for_expert()
 
    **Expected output:**
    ```
@@ -1219,14 +1778,21 @@ Headers: X-API-KEY: {from environment}
    [REPRESENT] Market Cap: $X trillion
    [REPRESENT] Current Price: $XXX.XX
 
+   Pre-Calculated Metrics Summary:
+     ├─ Piotroski F-Score: 8/9 (Very Strong)
+     ├─ Altman Z-Score: 4.52 (Safe Zone)
+     ├─ Quality Score: 87/100
+     └─ Red Flags: 0 | Green Flags: 4
+
    Experts to dispatch:
-     ├─ Warren Buffett  (moat, intrinsic value)
-     ├─ Ben Graham      (margin of safety, asset values)
+     ├─ Warren Buffett  (moat, owner earnings, FCF conversion)
+     ├─ Ben Graham      (margin of safety, Z-Score, NCAV)
      ...
    ```
 
-4. **[IMPLEMENT] Phase** (60-180 seconds):
+6. **[IMPLEMENT] Phase** (60-180 seconds):
    - Spawn 7 Task subagents in parallel
+   - Each expert receives pre-calculated metrics from processing layer
    - Wait for all to complete
 
    **Expected output:**
@@ -1241,7 +1807,7 @@ Headers: X-API-KEY: {from environment}
    ...
    ```
 
-5. **[VALIDATE] Phase** (2-5 seconds):
+7. **[VALIDATE] Phase** (2-5 seconds):
    - Check JSON schema compliance
    - Identify contradictions
 
@@ -1252,7 +1818,7 @@ Headers: X-API-KEY: {from environment}
    [VALIDATE] Consensus strength: MODERATE
    ```
 
-6. **[EVOLVE] Phase** (5-10 seconds):
+8. **[EVOLVE] Phase** (5-10 seconds):
    - Tally signals
    - Build agreement matrix
    - Aggregate risks
@@ -1267,24 +1833,38 @@ Headers: X-API-KEY: {from environment}
    [EVOLVE] Consolidation complete.
    ```
 
-7. **[REFLECT] Phase** (5-10 seconds):
+9. **[REFLECT] Phase** (5-10 seconds):
    - Generate markdown report
-   - Save JSON file
+   - Save JSON file (includes processing_layer section)
    - Display to user
 
 ### Validation Checklist
 
 After test completes, verify:
 
+**Processing Layer:**
+- [ ] **Piotroski F-Score calculated** (0-9, with component breakdown)
+- [ ] **Altman Z-Score calculated** (with zone: safe/grey/distress)
+- [ ] **Beneish M-Score calculated** (with manipulation flags)
+- [ ] **Overall Quality Score calculated** (0-100)
+- [ ] **Red/Green flags identified** (not empty for AAPL)
+- [ ] **Owner Earnings calculated** (Buffett method)
+- [ ] **DuPont 5-factor breakdown** (ROE components)
+
+**Expert Outputs:**
 - [ ] **All 7 experts returned valid JSON**
 - [ ] **Each expert has unique signal/confidence** (not identical outputs)
+- [ ] **Experts reference pre-calculated metrics** (F-Score, Z-Score mentioned)
 - [ ] **Thesis text is substantial** (3-5 sentences, not generic)
 - [ ] **Forward outlook has specific predictions** (prices, timelines, catalysts)
 - [ ] **Holdings context reflects actual 13-F data** (Berkshire owns AAPL)
 - [ ] **Risks are specific to AAPL** (not generic "market risk")
 - [ ] **Agreement matrix shows variation** (some ✓, some ✗, some ·)
 - [ ] **Price targets vary by expert** (different philosophies = different targets)
+
+**Output Files:**
 - [ ] **JSON file saved to ./reports/AAPL_{date}.json**
+- [ ] **JSON includes `processing_layer` section**
 - [ ] **JSON file matches full_report_schema.json**
 
 ### Known AAPL Facts for Validation
@@ -1316,9 +1896,26 @@ If test fails, check:
 | Phase | Target Time | Notes |
 |-------|-------------|-------|
 | DISCOVER | < 30s | Parallel MCP calls |
+| PROCESS | < 5s | Python processing layer |
 | REPRESENT | < 2s | Data routing only |
 | IMPLEMENT | < 180s | Parallel expert dispatch |
 | VALIDATE | < 5s | Schema validation |
 | EVOLVE | < 10s | Consolidation logic |
 | REFLECT | < 10s | Report generation |
 | **Total** | **< 4 min** | Full mode target |
+
+### Processing Layer Test
+
+Run standalone processing layer test:
+
+```bash
+cd /mnt/d/github/FAskills/financial-researcher
+python3 -m processing.test_pipeline
+```
+
+Expected output:
+- All individual metric tests pass
+- Full pipeline test passes
+- Piotroski F-Score: 7/9 (test data)
+- Altman Z-Score: 7.79 (test data)
+- All calculations complete without errors
