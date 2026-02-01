@@ -49,7 +49,7 @@ Claude Code plugins for financial analysis.
    - `FINANCIAL_DATASETS_API_KEY` - [financialdatasets.ai](https://financialdatasets.ai)
    - `TAVILY_API_KEY` - [tavily.com](https://tavily.com)
 
-3. Copy `.env.example` to `.env` in `financial-researcher/` and add keys
+3. Copy `.env.example` to `.env` and add your API keys
 
 ## Structure
 
