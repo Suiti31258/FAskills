@@ -68,6 +68,12 @@ class FinancialData:
     shareholders_equity: float = 0
     retained_earnings: float = 0
     book_value_per_share: float = 0
+    
+    # Banking Specific
+    non_performing_assets: float = 0
+    loan_loss_reserves: float = 0
+    total_loans: float = 0
+    total_deposits: float = 0
 
     # Cash Flow Statement
     operating_cash_flow: float = 0
@@ -248,6 +254,10 @@ def extract_balance_sheet(raw: Dict[str, Any]) -> Dict[str, float]:
         'total_liabilities': raw.get('total_liabilities', 0) or 0,
         'shareholders_equity': raw.get('total_stockholders_equity', 0) or raw.get('total_equity', 0) or 0,
         'retained_earnings': raw.get('retained_earnings', 0) or 0,
+        'non_performing_assets': raw.get('non_performing_assets', 0) or 0,
+        'loan_loss_reserves': raw.get('loan_loss_reserves', 0) or raw.get('allowance_for_loan_losses', 0) or 0,
+        'total_loans': raw.get('total_loans', 0) or raw.get('loans_net', 0) or 0,
+        'total_deposits': raw.get('total_deposits', 0) or raw.get('deposits', 0) or 0,
     }
 
 
@@ -332,6 +342,10 @@ def extract_financial_period(
         total_liabilities=bal['total_liabilities'],
         shareholders_equity=bal['shareholders_equity'],
         retained_earnings=bal['retained_earnings'],
+        non_performing_assets=bal['non_performing_assets'],
+        loan_loss_reserves=bal['loan_loss_reserves'],
+        total_loans=bal['total_loans'],
+        total_deposits=bal['total_deposits'],
 
         # Cash flow
         operating_cash_flow=cf['operating_cash_flow'],
@@ -527,9 +541,9 @@ def extract_company_data(
     for key in sorted(annual_periods.keys(), reverse=True):
         data = annual_periods[key]
         fin = extract_financial_period(
-            data.get('income', {}),
-            data.get('balance', {}),
-            data.get('cashflow', {}),
+            data.get('income') or {},
+            data.get('balance') or {},
+            data.get('cashflow') or {},
             period='annual'
         )
         company.financials_annual.append(fin)
@@ -538,9 +552,9 @@ def extract_company_data(
     for key in sorted(quarterly_periods.keys(), reverse=True):
         data = quarterly_periods[key]
         fin = extract_financial_period(
-            data.get('income', {}),
-            data.get('balance', {}),
-            data.get('cashflow', {}),
+            data.get('income') or {},
+            data.get('balance') or {},
+            data.get('cashflow') or {},
             period='quarterly'
         )
         company.financials_quarterly.append(fin)

@@ -105,28 +105,30 @@ options:
 Each expert needs specific data. Fetch the UNION once, then route SUBSETS to each expert.
 
 ```
-┌─────────────────┬────┬────┬────┬────┬────┬────┬────┐
-│ Data Type       │ WB │ BG │ PL │ CW │ GS │ RD │ MB │
-├─────────────────┼────┼────┼────┼────┼────┼────┼────┤
-│ income_statements│ ✓  │ ✓  │ ✓  │ ✓  │    │    │ ✓  │
-│ balance_sheets  │ ✓  │ ✓  │ ✓  │ ✓  │    │ ✓  │ ✓  │
-│ cash_flows      │ ✓  │ ✓  │ ✓  │ ✓  │    │ ✓  │ ✓  │
-│ financial_metrics│ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │
-│ company_facts   │ ✓  │    │ ✓  │ ✓  │    │    │ ✓  │
-│ prices          │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │
-│ insider_trades  │ ✓  │    │ ✓  │    │    │    │ ✓  │
-│ sec_filings     │ ✓  │ ✓  │ ✓  │ ✓  │    │ ✓  │ ✓  │
-│ 13f_berkshire   │ ✓  │    │    │    │    │    │    │
-│ 13f_ark         │    │    │    │ ✓  │    │    │    │
-│ 13f_soros       │    │    │    │    │ ✓  │    │    │
-│ 13f_bridgewater │    │    │    │    │    │ ✓  │    │
-│ 13f_scion       │    │    │    │    │    │    │ ✓  │
-│ news_finance    │ ✓  │    │ ✓  │ ✓  │ ✓  │    │ ✓  │
-│ news_recent     │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │
-│ news_risks      │    │    │    │    │    │ ✓  │ ✓  │
-└─────────────────┴────┴────┴────┴────┴────┴────┴────┘
+┌─────────────────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│ Data Type       │ WB │ BG │ PL │ CW │ GS │ RD │ MB │ JD │ HM │
+├─────────────────┼────┼────┼────┼────┼────┼────┼────┼────┼────┤
+│ income_statements│ ✓  │ ✓  │ ✓  │ ✓  │    │    │ ✓  │ ✓  │    │
+│ balance_sheets  │ ✓  │ ✓  │ ✓  │ ✓  │    │ ✓  │ ✓  │ ✓  │    │
+│ cash_flows      │ ✓  │ ✓  │ ✓  │ ✓  │    │ ✓  │ ✓  │ ✓  │    │
+│ financial_metrics│ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │
+│ company_facts   │ ✓  │    │ ✓  │ ✓  │    │    │ ✓  │ ✓  │ ✓  │
+│ prices          │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │    │ ✓  │
+│ insider_trades  │ ✓  │    │ ✓  │    │    │    │ ✓  │    │    │
+│ sec_filings     │ ✓  │ ✓  │ ✓  │ ✓  │    │ ✓  │ ✓  │ ✓  │    │
+│ 13f_berkshire   │ ✓  │    │    │    │    │    │    │    │    │
+│ 13f_ark         │    │    │    │ ✓  │    │    │    │    │    │
+│ 13f_soros       │    │    │    │    │ ✓  │    │    │    │    │
+│ 13f_bridgewater │    │    │    │    │    │ ✓  │    │    │    │
+│ 13f_scion       │    │    │    │    │    │    │ ✓  │    │    │
+│ 13f_jpmorgan    │    │    │    │    │    │    │    │ ✓  │    │
+│ 13f_oaktree     │    │    │    │    │    │    │    │    │ ✓  │
+│ news_finance    │ ✓  │    │ ✓  │ ✓  │ ✓  │    │ ✓  │ ✓  │ ✓  │
+│ news_recent     │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │ ✓  │
+│ news_risks      │    │    │    │    │    │ ✓  │ ✓  │ ✓  │ ✓  │
+└─────────────────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
 
-Legend: WB=Buffett, BG=Graham, PL=Lynch, CW=Wood, GS=Soros, RD=Dalio, MB=Burry
+Legend: WB=Buffett, BG=Graham, PL=Lynch, CW=Wood, GS=Soros, RD=Dalio, MB=Burry, JD=Dimon, HM=Marks
 ```
 
 ### 2.2 Data Windows (Extended)
@@ -206,7 +208,20 @@ get_institutional_ownership(
     investor="SCION_ASSET_MANAGEMENT_LLC",
     limit=200,
     report_period_gte=report_period_gte
+    report_period_gte=report_period_gte
 )  # Burry - concentrated portfolio
+
+get_institutional_ownership(
+    investor="JPMORGAN_CHASE__CO",
+    limit=500,
+    report_period_gte=report_period_gte
+)  # Jamie Dimon (JPM)
+
+get_institutional_ownership(
+    investor="OAKTREE_CAPITAL_MANAGEMENT_LP",
+    limit=300,
+    report_period_gte=report_period_gte
+)  # Howard Marks
 
 # Step 2: Get ALL institutional owners of target ticker
 get_institutional_ownership(ticker="{TICKER}", limit=100)
@@ -262,6 +277,8 @@ result = run_analysis(
         "SOROS_FUND_MANAGEMENT_LLC": soros_holdings,
         "BRIDGEWATER_ASSOCIATES_LP": bridgewater_holdings,
         "SCION_ASSET_MANAGEMENT_LLC": scion_holdings,
+        "JPMORGAN_CHASE__CO": jpm_holdings,
+        "OAKTREE_CAPITAL_MANAGEMENT_LP": oaktree_holdings,
     },
     insider_trades=insider_trades_response,
     company_facts=company_facts_response,
@@ -480,7 +497,11 @@ const calculated = {
   roic: calculate_roic(financials),                     // Return on Invested Capital
   graham: calculate_graham_valuation(financials, price), // Graham Number, NCAV
   valuation: calculate_valuation_metrics(financials, market_data), // PEG, EV/EBITDA, etc.
-  growth: calculate_growth_analysis(financials)         // CAGR, trends
+  growth: calculate_growth_analysis(financials),        // CAGR, trends
+  banking_risk: calculate_banking_risk(financials),     // JD: TCE, Texas Ratio
+  stress_test: stress_test_scenario(financials),        // JD: Stress test
+  cycle_position: calculate_cycle_position(prices),     // HM: Valuation rank
+  ohlson: calculate_ohlson_o(financials)                // HM: Bankruptcy prob
 };
 
 const dataSubsets = {
@@ -583,6 +604,29 @@ const dataSubsets = {
     news_items: [...news_finance, ...news_recent, ...news_risks],
     insider_trades: insider_trades,  // Critical for Burry
     holdings_json: scion_holdings.filter(h => h.ticker === ticker)
+  },
+
+  jamie_dimon: {
+    // Pre-calculated metrics
+    banking_risk: calculated.banking_risk,
+    stress_test: calculated.stress_test,
+    altman: calculated.altman,
+    // Context
+    filings_content: sec_filings,
+    news_items: [...news_finance, ...news_risks],
+    holdings_json: jpm_holdings.filter(h => h.ticker === ticker)
+  },
+
+  howard_marks: {
+    // Pre-calculated metrics
+    cycle_position: calculated.cycle_position,
+    ohlson: calculated.ohlson,
+    valuation: calculated.valuation,
+    // Context
+    current_price: latest_price,
+    price_history: prices,
+    news_items: [...news_finance, ...news_recent], # Sentiment/Psychology
+    holdings_json: oaktree_holdings.filter(h => h.ticker === ticker)
   }
 };
 
@@ -597,6 +641,8 @@ const dataSubsets = {
 // │ Soros       │           │         │          │        │      │        │   ✓   │        │
 // │ Dalio       │     ✓     │    ✓    │          │        │  ✓   │        │   ✓   │   ✓    │
 // │ Burry       │     ✓     │    ✓    │    ✓     │   ✓    │      │        │   ✓   │   ✓    │
+// │ Dimon       │           │    ✓    │          │        │      │        │        │        │
+// │ Marks       │           │         │          │        │      │        │   ✓    │        │
 // └─────────────┴───────────┴─────────┴──────────┴────────┴──────┴────────┴───────┴────────┘
 ```
 
@@ -688,6 +734,18 @@ Task({
   subagent_type: "general-purpose",
   description: "Michael Burry analysis of {TICKER}",
   prompt: constructedBurryPrompt
+})
+
+Task({
+  subagent_type: "general-purpose",
+  description: "Jamie Dimon analysis of {TICKER}",
+  prompt: constructedDimonPrompt
+})
+
+Task({
+  subagent_type: "general-purpose",
+  description: "Howard Marks analysis of {TICKER}",
+  prompt: constructedMarksPrompt
 })
 ```
 

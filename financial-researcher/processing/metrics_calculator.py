@@ -1158,6 +1158,11 @@ class ComprehensiveAnalysis:
     green_flags: List[str] = field(default_factory=list)
     overall_quality_score: float = 0.0  # 0-100
 
+    # Risk Metrics (New)
+    banking_risk: Optional[MetricResult] = None
+    cycle_position: Optional[MetricResult] = None
+    stress_test: Optional[MetricResult] = None  # 0-100
+
 
 def aggregate_flags(analysis: ComprehensiveAnalysis) -> Tuple[List[str], List[str]]:
     """Collect all red and green flags from analysis."""
@@ -1228,3 +1233,175 @@ def calculate_quality_score(analysis: ComprehensiveAnalysis) -> float:
 
     # Bound to 0-100
     return max(0, min(100, score))
+# =============================================================================
+# 5. RISK & BANKING METRICS (New for Dimon/Marks)
+# =============================================================================
+
+def calculate_banking_risk(
+    total_assets: float,
+    total_equity: float,
+    intangible_assets: float,
+    non_performing_assets: float,
+    loan_loss_reserves: float,
+    total_loans: float,
+    cash_and_equivalents: float,
+    total_deposits: float
+) -> MetricResult:
+    """
+    Banking-specific risk metrics for "Jamie Dimon" expert.
+
+    Metrics:
+    - TCE Ratio: Tangible Common Equity / Tangible Assets
+    - Texas Ratio: NPAs / (TCE + Reserves)
+    - Loan-to-Deposit Ratio: Liquidity check
+    """
+    flags = []
+    components = {}
+
+    # Tangible Common Equity (TCE)
+    tce = total_equity - intangible_assets
+    tangible_assets = total_assets - intangible_assets
+    tce_ratio = tce / tangible_assets if tangible_assets > 0 else 0
+
+    # Texas Ratio (Credit trouble)
+    # NPAs / (TCE + Reserves)
+    denominator = tce + loan_loss_reserves
+    texas_ratio = non_performing_assets / denominator if denominator > 0 else 0
+
+    # Liquidity
+    ltd_ratio = total_loans / total_deposits if total_deposits > 0 else 0
+    cash_to_assets = cash_and_equivalents / total_assets if total_assets > 0 else 0
+
+    components = {
+        "tce": tce,
+        "tce_ratio": round(tce_ratio * 100, 2),
+        "texas_ratio": round(texas_ratio * 100, 2),
+        "loan_to_deposit": round(ltd_ratio * 100, 2),
+        "cash_to_assets": round(cash_to_assets * 100, 2)
+    }
+
+    # Interpretation based on TCE (Capital)
+    if tce_ratio > 0.10:
+        interpretation = "Fortress Balance Sheet (TCE > 10%)"
+    elif tce_ratio > 0.06:
+        interpretation = "Adequate Capital (TCE 6-10%)"
+    else:
+        interpretation = "Thin Capital (TCE < 6%)"
+        flags.append("⚠️ Weak Capital Ratio - vulnerable to shocks")
+
+    # Texas Ratio check
+    if texas_ratio > 1.0:
+        flags.append("CRITICAL: Texas Ratio > 100% - Bank is failing")
+    elif texas_ratio > 0.5:
+        flags.append("High Credit Stress (Texas Ratio > 50%)")
+
+    return MetricResult(
+        value=round(tce_ratio * 100, 2),
+        interpretation=interpretation,
+        components=components,
+        flags=flags
+    )
+
+
+def calculate_cycle_position(
+    current_price: float,
+    price_history_5y: List[float],
+    current_pe: float,
+    pe_history_5y: List[float]
+) -> MetricResult:
+    """
+    Market Cycle Positioning for "Howard Marks" expert.
+
+    Assesses where the stock is relative to its own history.
+    """
+    if not price_history_5y:
+        return MetricResult(0, "No data", {}, [], 0.0)
+
+    # Price Percentile
+    sorted_prices = sorted(price_history_5y)
+    price_rank = sum(1 for p in sorted_prices if p < current_price) / len(sorted_prices)
+
+    # Drawdown from High
+    all_time_high = max(price_history_5y)
+    drawdown = (current_price - all_time_high) / all_time_high if all_time_high > 0 else 0
+
+    # Valuation Percentile (if data available)
+    val_rank = 0.5
+    if pe_history_5y and current_pe > 0:
+        sorted_pe = sorted([pe for pe in pe_history_5y if pe > 0])
+        if sorted_pe:
+            val_rank = sum(1 for pe in sorted_pe if pe < current_pe) / len(sorted_pe)
+
+    components = {
+        "price_percentile": round(price_rank * 100, 1),
+        "valuation_percentile": round(val_rank * 100, 1),
+        "drawdown_pct": round(drawdown * 100, 1)
+    }
+
+    # Howard Marks "Pendulum" Assessment
+    if val_rank > 0.9 or price_rank > 0.95:
+        interpretation = "Euphoria (Top of Cycle) - High Risk"
+        value = 2  # 0-10 scale where 0 is greed, 10 is fear
+    elif val_rank < 0.1 or price_rank < 0.1:
+        interpretation = "Despondency (Bottom of Cycle) - Max Opportunity"
+        value = 9
+    elif val_rank > 0.7:
+        interpretation = "Optimistic - Elevated Risk"
+        value = 4
+    elif val_rank < 0.3:
+        interpretation = "Pessimistic - Good Value"
+        value = 7
+    else:
+        interpretation = "Neutral - Mid-Cycle"
+        value = 5
+
+    return MetricResult(
+        value=value,
+        interpretation=interpretation,
+        components=components,
+        flags=[]
+    )
+
+
+def stress_test_scenario(
+    revenue: float,
+    ebit: float,
+    interest_expense: float,
+    scenario_revenue_drop: float = 0.20,
+    scenario_margin_compression: float = 0.05
+) -> MetricResult:
+    """
+    Simple Stress Test for Jamie Dimon analysis.
+    Scenario: Revenue drops 20%, margins compress.
+    Check: Can they still pay interest?
+    """
+    stressed_revenue = revenue * (1 - scenario_revenue_drop)
+    
+    # Current margin
+    current_margin = ebit / revenue if revenue > 0 else 0
+    stressed_margin = max(0, current_margin - scenario_margin_compression)
+    
+    stressed_ebit = stressed_revenue * stressed_margin
+    
+    # Stressed Interest Coverage
+    stressed_coverage = stressed_ebit / interest_expense if interest_expense > 0 else 999
+    
+    flags = []
+    if stressed_coverage < 1.0:
+        interpretation = "FAIL - Cannot cover interest in downturn"
+        flags.append(f"STRESS TEST FAILURE: coverage drops to {stressed_coverage:.2f}x")
+    elif stressed_coverage < 2.0:
+        interpretation = "Vulnerable - Coverage tight in downturn"
+    else:
+        interpretation = "PASS - Robust under stress"
+
+    return MetricResult(
+        value=round(stressed_coverage, 2),
+        interpretation=interpretation,
+        components={
+            "stressed_revenue": stressed_revenue,
+            "stressed_ebit": stressed_ebit,
+            "scenario": f"Rev -{scenario_revenue_drop*100}%, Margin -{scenario_margin_compression*100}%"
+        },
+        flags=flags
+    )

@@ -48,7 +48,11 @@ from .metrics_calculator import (
     analyze_trend,
     benchmark_metric,
     aggregate_flags,
+    aggregate_flags,
     calculate_quality_score,
+    calculate_banking_risk,
+    calculate_cycle_position,
+    stress_test_scenario,
 )
 
 
@@ -203,6 +207,29 @@ class AnalysisResult:
 
             # Overall Quality
             lines.append(f"## Overall Quality Score: {ca.overall_quality_score}/100")
+
+            # Risk Metrics (New)
+            lines.append("## Risk Metrics")
+            if ca.banking_risk:
+                lines.append(f"### Banking Risk: {ca.banking_risk.value}")
+                lines.append(f"Interpretation: {ca.banking_risk.interpretation}")
+                if ca.banking_risk.flags:
+                    lines.append(f"Flags: {', '.join(ca.banking_risk.flags)}")
+                lines.append("")
+
+            if ca.cycle_position:
+                lines.append(f"### Cycle Position: {ca.cycle_position.value}")
+                lines.append(f"Interpretation: {ca.cycle_position.interpretation}")
+                if ca.cycle_position.flags:
+                    lines.append(f"Flags: {', '.join(ca.cycle_position.flags)}")
+                lines.append("")
+
+            if ca.stress_test:
+                lines.append(f"### Stress Test Scenario: {ca.stress_test.value}")
+                lines.append(f"Interpretation: {ca.stress_test.interpretation}")
+                if ca.stress_test.flags:
+                    lines.append(f"Flags: {', '.join(ca.stress_test.flags)}")
+                lines.append("")
 
         return "\n".join(lines)
 
@@ -439,6 +466,60 @@ def calculate_all_metrics(company: CompanyData, wacc: float = 0.10) -> Comprehen
         earnings = [f.net_income for f in reversed(company.financials_annual)]
         analysis.earnings_trend = analyze_trend(earnings, "Earnings")
 
+    # === RISK ANALYSIS (Dimon/Marks) ===
+
+    # Banking Risk (Jamie Dimon)
+    try:
+        # Default to 0 if not available
+        intangibles = getattr(current, 'intangible_assets', 0) or 0
+        npas = getattr(current, 'non_performing_assets', 0) or 0
+        reserves = getattr(current, 'loan_loss_reserves', 0) or 0
+        loans = getattr(current, 'total_loans', 0) or 0
+        deposits = getattr(current, 'total_deposits', 0) or 0
+
+        analysis.banking_risk = calculate_banking_risk(
+            total_assets=current.total_assets,
+            total_equity=current.shareholders_equity,
+            intangible_assets=intangibles,
+            non_performing_assets=npas,
+            loan_loss_reserves=reserves,
+            total_loans=loans,
+            cash_and_equivalents=current.cash,
+            total_deposits=deposits
+        )
+    except Exception:
+        pass
+
+    # Stress Test (Jamie Dimon)
+    try:
+        analysis.stress_test = stress_test_scenario(
+            revenue=current.revenue,
+            ebit=current.ebit,
+            interest_expense=current.interest_expense
+        )
+    except Exception:
+        pass
+
+    # Cycle Positioning (Howard Marks)
+    try:
+        # Extract 5y price history if available (passed in price_data usually contains history)
+        # Note: In a real implementation we'd parse the price_data dict for history
+        # For now, we'll assume a placeholder or simple extraction if implemented
+        current_price = company.price.current_price
+        # Placeholder for history extraction - would need to be passed in CompanyData
+        price_history = [] 
+        pe_history = []
+        
+        analysis.cycle_position = calculate_cycle_position(
+            current_price=current_price,
+            price_history_5y=price_history,
+            current_pe=company.metrics.pe_ratio or 0,
+            pe_history_5y=pe_history
+        )
+    except Exception:
+        pass
+
+
     # === SUMMARY ===
 
     # Aggregate flags
@@ -590,6 +671,18 @@ def format_for_expert(result: AnalysisResult, expert_type: str) -> str:
             f"- Beneish M-Score (Manipulation): {result.comprehensive_analysis.beneish_m.value if result.comprehensive_analysis and result.comprehensive_analysis.beneish_m else 'N/A'}",
             f"- Sloan Accrual Ratio: {result.comprehensive_analysis.sloan_accrual.value if result.comprehensive_analysis and result.comprehensive_analysis.sloan_accrual else 'N/A'}%",
             f"- All Red Flags: {len(result.comprehensive_analysis.red_flags) if result.comprehensive_analysis else 0}",
+        ],
+        "jamie_dimon": [
+            "\n## Dimon-Relevant Highlights (Banking Risk)",
+            f"- Fortress Balance Sheet (TCE): {result.comprehensive_analysis.banking_risk.interpretation if result.comprehensive_analysis and result.comprehensive_analysis.banking_risk else 'N/A'}",
+            f"- Stress Test: {result.comprehensive_analysis.stress_test.interpretation if result.comprehensive_analysis and result.comprehensive_analysis.stress_test else 'N/A'}",
+            f"- Altman Z-Score: {result.comprehensive_analysis.altman_z.value if result.comprehensive_analysis and result.comprehensive_analysis.altman_z else 'N/A'}",
+        ],
+        "howard_marks": [
+            "\n## Marks-Relevant Highlights (Cycle Risk)",
+            f"- Cycle Position: {result.comprehensive_analysis.cycle_position.interpretation if result.comprehensive_analysis and result.comprehensive_analysis.cycle_position else 'N/A'}",
+            f"- Valuation Check: P/E {result.company_data.metrics.pe_ratio if result.company_data and result.company_data.metrics else 'N/A'}",
+            f"- O-Score Probability: {result.comprehensive_analysis.ohlson_o.value if result.comprehensive_analysis and result.comprehensive_analysis.ohlson_o else 'N/A'}",
         ],
     }
 
